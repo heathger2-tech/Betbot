@@ -1,0 +1,29 @@
+# Exported from Render on 2025-09-24T20:30:03Z
+version: "1"
+projects:
+- name: betbot
+  environments:
+  - name: Production
+    services:
+    - type: web
+      name: Betbot
+      runtime: python
+      repo: https://github.com/heathger2-tech/Betbot
+      plan: free
+      envVars:
+      - key: TAP_PAYOUT_RATE
+        sync: false
+      - key: WIN_RATE
+        sync: false
+      - key: HOUSE_EDGE
+        sync: false
+      - key: ADMIN_USER_ID
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      region: oregon
+      buildCommand: pip install -r requirements.txt
+      startCommand: python main.py & python bot.py
+      autoDeployTrigger: commit
