@@ -1,8 +1,8 @@
+import os
 import asyncio
 import logging
 import sqlite3
 from datetime import datetime
-import os
 from dotenv import load_dotenv
 import random
 import uvicorn
@@ -11,6 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from telegram import Bot
 import requests
+
+# Ensure the SQLite directory exists before connecting
+os.makedirs('/mnt/data', exist_ok=True)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -102,15 +105,15 @@ async def place_bet(bet: BetRequest):
             raise HTTPException(status_code=400, detail="Insufficient balance")
 
         if bet.mode == 'aviation':
-            outcome ="win" if random.random() < WIN_RATE else"lose"
-            crash_point = bet.multiplier + random.uniform(0.1, 1.0) if outcome =="win" else random.uniform(1.0, bet.multiplier - 0.1)
-            player_profit = bet.bet_amount* (bet.multiplier - 1) * (1 - HOUSE_EDGE) if outcome =="win" else -bet.bet_amount
-            house_profit = bet.bet_amount* HOUSE_EDGE if outcome =="lose" else -player_profit* HOUSE_EDGE
+            outcome = "win" if random.random() < WIN_RATE else "lose"
+            crash_point = bet.multiplier + random.uniform(0.1, 1.0) if outcome == "win" else random.uniform(1.0, bet.multiplier - 0.1)
+            player_profit = bet.bet_amount * (bet.multiplier - 1) * (1 - HOUSE_EDGE) if outcome == "win" else -bet.bet_amount
+            house_profit = bet.bet_amount * HOUSE_EDGE if outcome == "lose" else -player_profit * HOUSE_EDGE
         else:
-            outcome ="win"
+            outcome = "win"
             crash_point = bet.multiplier
-            player_profit = bet.bet_amount* TAP_PAYOUT_RATE
-            house_profit = bet.bet_amount* (1 - TAP_PAYOUT_RATE)
+            player_profit = bet.bet_amount * TAP_PAYOUT_RATE
+            house_profit = bet.bet_amount * (1 - TAP_PAYOUT_RATE)
 
         new_balance = update_balance(bet.user_id, player_profit + house_profit, bet.mode)
         total_profit = update_profit(house_profit, bet.mode)
@@ -123,7 +126,7 @@ async def place_bet(bet: BetRequest):
             f"🎮 {bet.mode.capitalize()} Action\nAmount:${bet.bet_amount:.2f} @ {bet.multiplier}x\nOutcome: {outcome}\nPlayer Profit:${player_profit:.2f}\nHouse Profit:${house_profit:.2f}\nBalance:${new_balance:.2f}\nTotal System Profit:${total_profit:.2f}"
         )
 
-        return {"status":"success","outcome": outcome,"balance": new_balance,"crash_point": crash_point}
+        return {"status": "success", "outcome": outcome, "balance": new_balance, "crash_point": crash_point}
     except Exception as e:
         logger.error(f"Error processing {bet.mode} action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -134,13 +137,13 @@ async def deposit(user_id: int, amount: float):
         try:
             response = requests.post("https://api.paystack.co/transaction/initialize",
                 headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
-                json={"email": f"danny_{user_id}@example.com","amount": int(amount* 100)}
+                json={"email": f"danny_{user_id}@example.com", "amount": int(amount * 100)}
             )
             response.raise_for_status()
             data = response.json()
             new_balance = update_balance(user_id, amount)
             await send_telegram_notification(f"💸 Deposit\nAmount:${amount:.2f}\nNew Balance:${new_balance:.2f}\nPaystack URL: {data['data']['authorization_url']}")
-            return {"status":"success","balance": new_balance,"paystack_url": data['data']['authorization_url']}
+            return {"status": "success", "balance": new_balance, "paystack_url": data['data']['authorization_url']}
         except Exception as e:
             logger.error(f"Deposit attempt {attempt + 1} failed: {e}")
             if attempt == 2:
@@ -157,7 +160,7 @@ async def withdraw(user_id: int, amount: float):
             raise HTTPException(status_code=400, detail="Insufficient balance")
         new_balance = update_balance(user_id, -amount)
         await send_telegram_notification(f"💳 Withdrawal\nAmount:${amount:.2f}\nNew Balance:${new_balance:.2f}\nNote: Complete withdrawal via Paystack dashboard.")
-        return {"status":"success","balance": new_balance}
+        return {"status": "success", "balance": new_balance}
     except Exception as e:
         logger.error(f"Error processing withdrawal: {e}")
         raise HTTPException(status_code=500, detail=str(e))
