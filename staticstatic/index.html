@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danny's Cash Machine</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; text-align: center; margin: 0;}
+        .game-container { max-width: 600px; margin: 50px auto; padding: 20px;}
+        canvas { border: 2px solid #ff4500; background: #333; margin-top: 20px;}
+        button { background: #ff4500; color: #fff; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; border-radius: 5px;}
+        button:hover { background: #ff6347;}
+        input, select { margin: 10px; padding: 8px; border-radius: 5px; border: none;}
+        .tap-counter { font-size: 24px; margin: 10px;}
+        h1 { color: #ff4500;}
+        p { font-size: 18px;}
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Danny's Cash Machine</h1>
+        <p>Balance:$<span id="balance">0</span></p>
+        <select id="mode" onchange="toggleMode()">
+            <option value="aviation">Aviation Mode</option>
+            <option value="tap">Tap-to-Pay Mode</option>
+        </select>
+        <div id="aviation-controls">
+            <input type="number" id="betAmount" placeholder="Bet Amount ($)" min="0.1" step="0.1">
+            <input type="number" id="multiplier" placeholder="Target Multiplier (e.g., 2)" min="1.1" step="0.1">
+            <button onclick="placeBet()">Bet</button>
+        </div>
+        <div id="tap-controls" style="display: none;">
+            <p class="tap-counter">Taps: <span id="tapCount">0</span></p>
+            <button onclick="tap()">Tap!</button>
+            <button onclick="convertTaps()">Convert to Cash</button>
+        </div>
+        <button onclick="deposit()">Deposit</button>
+        <button onclick="withdraw()">Withdraw</button>
+        <canvas id="gameCanvas" width="500" height="300"></canvas>
+    </div>
+    <script>
+        const userId = 7751724771;
+        let isPlaying = false;
+        let tapCount = 0;
+
+        async function updateBalance() {
+            const response = await fetch(`/balance?user_id=${userId}`);
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.balance.toFixed(2);}
+        function toggleMode() {
+            const mode = document.getElementById('mode').value;
+            document.getElementById('aviation-controls').style.display = mode === 'aviation'? 'block' : 'none';
+            document.getElementById('tap-controls').style.display = mode === 'tap'? 'block' : 'none';}
+        async function placeBet() {
+            if (isPlaying) return;
+            isPlaying = true;
+            const mode = document.getElementById('mode').value;
+            if (mode!== 'aviation') return;
+            const betAmount = parseFloat(document.getElementById('betAmount').value);
+            const multiplier = parseFloat(document.getElementById('multiplier').value);
+            if (!betAmount ||!multiplier) {
+                alert("Enter valid bet amount and multiplier!");
+                isPlaying = false;
+                return;}            const response = await fetch('/bet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json'},                body: JSON.stringify({ user_id: userId, bet_amount: betAmount, multiplier, mode })
+            });
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.balance.toFixed(2);
+            animateGame(result.outcome === 'win'? result.crash_point : 1, mode);}
+        function tap() {
+            if (isPlaying) return;
+            tapCount += 1;
+            document.getElementById('tapCount').textContent = tapCount;}
+        async function convertTaps() {
+            if (isPlaying || tapCount < 100) {
+                if (tapCount < 100) alert("Need 100 taps to convert!");
+                return;}            isPlaying = true;
+            const betAmount = tapCount / 100;
+            const multiplier = 1;
+            const mode = 'tap';
+            const response = await fetch('/bet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json'},                body: JSON.stringify({ user_id: userId, bet_amount: betAmount, multiplier, mode })
+            });
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.balance.toFixed(2);
+            tapCount = 0;
+            document.getElementById('tapCount').textContent = tapCount;
+            animateGame(result.crash_point, mode);}
+        async function deposit() {
+            const amount = parseFloat(prompt("Enter deposit amount ($):"));
+            if (!amount || amount <= 0) {
+                alert("Enter a valid amount!");
+                return;}            const response = await fetch('/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json'},                body: JSON.stringify({ user_id: userId, amount })
+            });
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.balance.toFixed(2);
+            window.open(result.paystack_url, '_blank');}
+        async function withdraw() {
+            const amount = parseFloat(prompt("Enter withdrawal amount ($):"));
+            if (!amount || amount <= 0) {
+                alert("Enter a valid amount!");
+                return;}            const response = await fetch('/withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json'},                body: JSON.stringify({ user_id: userId, amount })
+            });
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.balance.toFixed(2);
+            alert(`Withdrawn $${amount}! Check your bank/Mozartbet.`);}
+        function animateGame(crashPoint, mode) {
+            let multiplier = 1;
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const interval = setInterval(() => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff4500';
+                ctx.font = '30px Arial';
+                if (mode === 'aviation') {
+                    ctx.fillText(`Multiplier:${multiplier.toFixed(2)}x`, 50, 50);
+                    multiplier += 0.05;
+                    if (multiplier >= crashPoint) {
+                        clearInterval(interval);
+                        ctx.fillText(multiplier >= crashPoint? 'CRASH!' : 'WIN!', 50, 100);
+                        isPlaying = false;}                } else {
+                    ctx.fillText(`Taps Converted! Profit: $${(tapCount / 100* 0.9).toFixed(2)}`, 50, 50);
+                    clearInterval(interval);
+                    isPlaying = false;}            }, 50);}
+        updateBalance();
+    </script>
+</body>
+</html>
