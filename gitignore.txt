@@ -1,0 +1,2 @@
+.env
+solo_cashmachine.db
